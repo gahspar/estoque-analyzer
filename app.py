@@ -1,27 +1,22 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime
 from estoque_analyzer import EstoqueAnalyzer
 from analise_avancada import AnaliseAvancada
 
 # Configuração da página
 st.set_page_config(
-    page_title="Dashboard de Análise de Estoque",
+    page_title="Análise de Estoque Avançada",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # Título e descrição
-st.title("📊 Dashboard de Análise de Estoque Avançada")
+st.title("📊 Análise de Estoque Avançada")
 st.markdown("""
-Sistema inteligente para análise de estoque com previsão de demanda, análise sazonal e sugestões de compra.
+Sistema inteligente para análise de estoque com previsão de demanda baseada em média de pacientes.
 Especialmente otimizado para **medicamentos em unidades de saúde**.
 """)
 
@@ -36,16 +31,21 @@ with st.sidebar:
         help="Selecione o tipo de produto para aplicar fatores de correção específicos"
     )
     
-    # Média de pacientes (para medicamentos)
-    if tipo_produto == "medicamentos":
-        media_pacientes = st.number_input(
-            "Média Mensal de Pacientes",
-            min_value=0,
-            value=1000,
-            help="Média mensal de pacientes para cálculo de demanda esperada"
-        )
-    else:
-        media_pacientes = None
+    # Média de pacientes (obrigatório para cálculo)
+    media_pacientes = st.number_input(
+        "Média Mensal de Pacientes",
+        min_value=1,
+        value=1000,
+        help="Média mensal de pacientes para cálculo de demanda esperada e previsão de estoque"
+    )
+    
+    # Período de previsão
+    periodo_previsao = st.selectbox(
+        "Período de Previsão",
+        [30, 60, 90, 180, 365],
+        format_func=lambda x: f"{x} dias",
+        help="Período para calcular o estoque ideal futuro"
+    )
     
     st.divider()
     
@@ -66,11 +66,10 @@ with st.sidebar:
     
     st.header("ℹ️ Sobre")
     st.markdown("""
-    **Funcionalidades Avançadas:**
+    **Funcionalidades:**
     - 🎯 Previsão de demanda baseada em pacientes
-    - 📈 Análise sazonal automática
+    - 📈 Cálculo de estoque ideal futuro
     - 💡 Sugestões inteligentes de compra
-    - 📊 Dashboard com visualizações
     - 🔔 Alertas e recomendações
     
     **Status:**
@@ -124,123 +123,6 @@ def criar_metricas_principais(resultado):
             help="Soma total de todas as quantidades em estoque"
         )
 
-def criar_grafico_pizza(resultado):
-    """Cria gráfico de pizza com distribuição de situação"""
-    if resultado is None or len(resultado) == 0:
-        return
-    
-    # Preparar dados
-    situacoes = resultado['Situação'].value_counts()
-    
-    # Cores
-    cores = {'OK': '#00ff88', 'Comprar': '#ff4444'}
-    
-    # Criar gráfico
-    fig = px.pie(
-        values=situacoes.values,
-        names=situacoes.index,
-        title="Distribuição por Situação",
-        color_discrete_map=cores
-    )
-    
-    fig.update_traces(textposition='inside', textinfo='percent+label')
-    fig.update_layout(height=400)
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def criar_grafico_barras_top_produtos(resultado, top_n=10):
-    """Cria gráfico de barras com top produtos"""
-    if resultado is None or len(resultado) == 0:
-        return
-    
-    # Top produtos por saída mensal
-    top_saidas = resultado.nlargest(top_n, 'Média de Saída Mensal')
-    
-    fig = px.bar(
-        top_saidas,
-        x='Descrição',
-        y='Média de Saída Mensal',
-        title=f"Top {top_n} Produtos por Saída Mensal",
-        color='Situação',
-        color_discrete_map={'OK': '#00ff88', 'Comprar': '#ff4444'}
-    )
-    
-    fig.update_layout(
-        xaxis_tickangle=-45,
-        height=400,
-        showlegend=True
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def criar_grafico_estoque_vs_demanda(resultado):
-    """Cria gráfico de dispersão estoque vs demanda"""
-    if resultado is None or len(resultado) == 0:
-        return
-    
-    fig = px.scatter(
-        resultado,
-        x='Média de Saída Mensal',
-        y='Quantidade em estoque',
-        color='Situação',
-        size='Demanda Esperada',
-        hover_data=['Descrição', 'Prazo Estoque (dias)'],
-        title="Estoque vs Demanda Mensal",
-        color_discrete_map={'OK': '#00ff88', 'Comprar': '#ff4444'}
-    )
-    
-    # Adicionar linha de equilíbrio
-    max_val = max(resultado['Média de Saída Mensal'].max(), resultado['Quantidade em estoque'].max())
-    fig.add_trace(
-        go.Scatter(
-            x=[0, max_val],
-            y=[0, max_val],
-            mode='lines',
-            name='Linha de Equilíbrio',
-            line=dict(color='gray', dash='dash')
-        )
-    )
-    
-    fig.update_layout(height=500)
-    st.plotly_chart(fig, use_container_width=True)
-
-def criar_grafico_prazo_estoque(resultado):
-    """Cria gráfico de prazo de estoque"""
-    if resultado is None or len(resultado) == 0:
-        return
-    
-    # Categorizar por prazo
-    def categorizar_prazo(prazo):
-        if prazo < 0:
-            return 'Crítico (< 0 dias)'
-        elif prazo < 30:
-            return 'Baixo (0-30 dias)'
-        elif prazo < 90:
-            return 'Normal (30-90 dias)'
-        else:
-            return 'Alto (> 90 dias)'
-    
-    resultado['Categoria Prazo'] = resultado['Prazo Estoque (dias)'].apply(categorizar_prazo)
-    
-    # Contar por categoria
-    categorias = resultado['Categoria Prazo'].value_counts()
-    
-    fig = px.bar(
-        x=categorias.index,
-        y=categorias.values,
-        title="Distribuição por Prazo de Estoque",
-        color=categorias.index,
-        color_discrete_map={
-            'Crítico (< 0 dias)': '#ff0000',
-            'Baixo (0-30 dias)': '#ffaa00',
-            'Normal (30-90 dias)': '#00ff88',
-            'Alto (> 90 dias)': '#0088ff'
-        }
-    )
-    
-    fig.update_layout(height=400, showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
-
 def exibir_recomendacoes(resultado):
     """Exibe recomendações baseadas na análise"""
     if resultado is None or len(resultado) == 0:
@@ -280,6 +162,7 @@ def exibir_tabela_resultados(resultado):
     resultado_formatado['Estoque Restante Estimado'] = resultado_formatado['Estoque Restante Estimado'].apply(lambda x: f"{x:,.2f}")
     resultado_formatado['Prazo Estoque (dias)'] = resultado_formatado['Prazo Estoque (dias)'].apply(lambda x: f"{x:,.1f}")
     resultado_formatado['Quantidade Sugerida Compra'] = resultado_formatado['Quantidade Sugerida Compra'].apply(lambda x: f"{x:,.2f}")
+    resultado_formatado['Estoque Ideal Futuro'] = resultado_formatado['Estoque Ideal Futuro'].apply(lambda x: f"{x:,.2f}")
     
     # Exibir tabela com formatação
     st.dataframe(
@@ -377,7 +260,8 @@ def main():
                     saidas_file, 
                     config_manual if config_manual else None,
                     tipo_produto,
-                    media_pacientes
+                    media_pacientes,
+                    periodo_previsao
                 )
                 
                 if resultado is None:
@@ -389,6 +273,7 @@ def main():
                 st.session_state['analise_feita'] = True
                 st.session_state['tipo_produto'] = tipo_produto
                 st.session_state['media_pacientes'] = media_pacientes
+                st.session_state['periodo_previsao'] = periodo_previsao
                 
         except Exception as e:
             st.error(f"❌ Erro durante a análise: {str(e)}")
@@ -400,38 +285,19 @@ def main():
         
         # Informações da análise
         st.markdown("---")
-        st.subheader("📊 Dashboard de Resultados")
+        st.subheader("📊 Resultados da Análise")
         
-        # Informações do tipo de produto
-        if st.session_state.get('tipo_produto'):
+        # Informações do tipo de produto e configurações
+        col_info1, col_info2, col_info3 = st.columns(3)
+        with col_info1:
             st.info(f"🎯 **Tipo de Produto:** {st.session_state['tipo_produto'].title()}")
-        if st.session_state.get('media_pacientes'):
+        with col_info2:
             st.info(f"👥 **Média de Pacientes:** {st.session_state['media_pacientes']:,} pacientes/mês")
+        with col_info3:
+            st.info(f"📅 **Período de Previsão:** {st.session_state['periodo_previsao']} dias")
         
         # Métricas principais
         criar_metricas_principais(resultado)
-        
-        # Gráficos
-        st.markdown("---")
-        st.subheader("📈 Visualizações")
-        
-        # Primeira linha de gráficos
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            criar_grafico_pizza(resultado)
-        
-        with col2:
-            criar_grafico_prazo_estoque(resultado)
-        
-        # Segunda linha de gráficos
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            criar_grafico_barras_top_produtos(resultado)
-        
-        with col4:
-            criar_grafico_estoque_vs_demanda(resultado)
         
         # Recomendações
         st.markdown("---")

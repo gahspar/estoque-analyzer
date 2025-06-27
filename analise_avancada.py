@@ -117,6 +117,27 @@ class AnaliseAvancada:
         
         return round(quantidade_comprar, 2)
     
+    def calcular_estoque_ideal_futuro(self, demanda_esperada, periodo_previsao):
+        """Calcula o estoque ideal futuro baseado no período de previsão"""
+        fatores = self.fatores_correcao.get(self.tipo_produto, self.fatores_correcao['medicamentos'])
+        
+        # Converter período de dias para meses
+        periodo_meses = periodo_previsao / 30
+        
+        # Demanda total para o período
+        demanda_total = demanda_esperada * periodo_meses
+        
+        # Estoque de segurança (baseado no prazo de segurança)
+        estoque_seguranca = demanda_esperada * (fatores['prazo_seguranca'] / 30)
+        
+        # Estoque ideal futuro
+        estoque_ideal = demanda_total + estoque_seguranca
+        
+        # Aplicar fator de correção baseado no tipo de produto
+        estoque_ideal *= fatores['fator_sazonal']
+        
+        return round(estoque_ideal, 2)
+    
     def analisar_sazonalidade(self, dados_mensais):
         """Analisa padrões sazonais nos dados"""
         if len(dados_mensais) < 12:

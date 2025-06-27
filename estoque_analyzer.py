@@ -133,7 +133,7 @@ class EstoqueAnalyzer:
             logger.error(f"Erro ao carregar planilha: {str(e)}")
             return None
     
-    def analisar_estoque(self, estoque_file, saidas_file, config_manual=None, tipo_produto='medicamentos', media_pacientes=None):
+    def analisar_estoque(self, estoque_file, saidas_file, config_manual=None, tipo_produto='medicamentos', media_pacientes=None, periodo_previsao=90):
         """Analisa estoque com suporte a análise avançada"""
         try:
             # Configurar análise avançada
@@ -204,6 +204,11 @@ class EstoqueAnalyzer:
                     estoque_atual, demanda_esperada
                 )
                 
+                # Calcular estoque ideal futuro baseado no período de previsão
+                estoque_ideal_futuro = self.analise_avancada.calcular_estoque_ideal_futuro(
+                    demanda_esperada, periodo_previsao
+                )
+                
                 resultados.append({
                     'Código': codigo,
                     'Descrição': descricao,
@@ -214,6 +219,7 @@ class EstoqueAnalyzer:
                     'Estoque Restante Estimado': estoque_restante,
                     'Prazo Estoque (dias)': prazo_estoque,
                     'Quantidade Sugerida Compra': quantidade_sugerida,
+                    'Estoque Ideal Futuro': estoque_ideal_futuro,
                     'Situação': situacao
                 })
             
@@ -223,6 +229,7 @@ class EstoqueAnalyzer:
             df_resultado['Tipo Produto'] = tipo_produto
             if media_pacientes:
                 df_resultado['Média Pacientes'] = media_pacientes
+            df_resultado['Período Previsão (dias)'] = periodo_previsao
             
             return df_resultado
             
